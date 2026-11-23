@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LLM Text Processing Pipeline</title>
+<style>
+/* ═══════════════════════════════════════════════════════
+   BASE
+═══════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff; --text:#0d1b2a; --muted:#64748b;
+  --blue:#1a73e8; --teal:#0d9488; --red:#ef4444;
+  --border:#e2e8f0; --stage-bg:#f8faff;
+  --radius:14px; --shadow:0 2px 18px rgba(0,0,0,.07);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:#fff;color:var(--text);line-height:1.65;font-size:15px}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════════════════ */
+.site-header{text-align:center;padding:36px 20px 28px;
+  border-bottom:1px solid var(--border)}
+.site-header h1{font-size:clamp(1.35rem,3.5vw,2.1rem);font-weight:800;
+  color:var(--text);letter-spacing:-.5px}
+.site-header p{color:var(--muted);margin-top:7px;font-size:.92rem}
+
+/* ═══════════════════════════════════════════════════════
+   PROGRESS NAV
+═══════════════════════════════════════════════════════ */
+.prog-nav{position:sticky;top:0;z-index:99;background:#fff;
+  border-bottom:1px solid var(--border);padding:10px 16px;
+  display:flex;align-items:center;justify-content:center;
+  gap:0;flex-wrap:nowrap;overflow-x:auto}
+.pstep{display:flex;align-items:center}
+.pbub{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);
+  color:var(--muted);font-size:.72rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .2s;text-decoration:none;flex-shrink:0}
+.pbub:hover,.pbub.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.parr{color:#cbd5e1;margin:0 4px;font-size:.8rem;flex-shrink:0}
+.plabel{font-size:.62rem;color:var(--muted);margin-left:4px;
+  white-space:nowrap;display:none}
+@media(min-width:800px){.plabel{display:inline}}
+
+/* ═══════════════════════════════════════════════════════
+   PIPELINE WRAPPER
+═══════════════════════════════════════════════════════ */
+.pipeline{max-width:860px;margin:0 auto;padding:30px 16px 80px}
+
+/* ═══════════════════════════════════════════════════════
+   STAGE CARD
+═══════════════════════════════════════════════════════ */
+.stage{background:#fff;border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);
+  margin-bottom:8px;overflow:hidden}
+.stage-head{display:flex;align-items:center;gap:14px;
+  padding:16px 22px;background:var(--stage-bg);
+  border-bottom:1px solid var(--border)}
+.snum{width:34px;height:34px;border-radius:50%;background:var(--blue);
+  color:#fff;font-weight:800;font-size:.85rem;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.stitle{font-size:1rem;font-weight:700;color:var(--text)}
+.ssub{font-size:.78rem;color:var(--muted);margin-top:1px}
+.stage-body{padding:22px}
+
+/* Explanation box */
+.expl{background:#f0f7ff;border-left:3px solid var(--blue);
+  border-radius:0 8px 8px 0;padding:11px 15px;
+  font-size:.85rem;color:#334155;margin-bottom:18px;line-height:1.6}
+
+/* Connector arrow */
+.connector{text-align:center;padding:6px 0;color:var(--blue);font-size:1.3rem;line-height:1}
+.conn-label{font-size:.68rem;color:var(--muted);margin-top:1px}
+
+/* ═══════════════════════════════════════════════════════
+   INPUT
+═══════════════════════════════════════════════════════ */
+textarea{width:100%;border:2px solid var(--border);border-radius:10px;
+  padding:13px 15px;font-size:.95rem;font-family:inherit;
+  color:var(--text);background:#fff;resize:vertical;min-height:70px;
+  outline:none;transition:border-color .2s}
+textarea:focus{border-color:var(--blue)}
+.analyze-btn{margin-top:11px;background:var(--blue);color:#fff;
+  border:none;border-radius:9px;padding:11px 28px;
+  font-size:.93rem;font-weight:700;cursor:pointer;transition:all .2s;
+  display:inline-flex;align-items:center;gap:7px}
+.analyze-btn:hover{background:#1557b0;transform:translateY(-1px)}
+
+/* ═══════════════════════════════════════════════════════
+   TOKEN CHIPS
+═══════════════════════════════════════════════════════ */
+.chips-row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{display:inline-flex;flex-direction:column;align-items:center;gap:3px}
+.chip-top{border-radius:8px;padding:5px 13px;font-family:'Courier New',monospace;
+  font-size:.85rem;font-weight:700;color:#fff}
+.chip-id{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;
+  border:1.5px solid;font-family:monospace;background:#fff}
+
+/* ═══════════════════════════════════════════════════════
+   TOKEN SEQUENCE WITH ID ARROWS
+═══════════════════════════════════════════════════════ */
+.id-row{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;align-items:flex-start}
+.id-unit{display:flex;flex-direction:column;align-items:center;gap:3px}
+.id-tok{border-radius:7px;padding:5px 13px;color:#fff;font-family:monospace;font-size:.88rem;font-weight:700}
+.id-arrow{font-size:.8rem;color:var(--muted)}
+.id-num{border-radius:6px;padding:3px 10px;border:2px solid;font-family:monospace;font-size:.82rem;font-weight:700;background:#fff}
+
+/* ═══════════════════════════════════════════════════════
+   VOCAB TABLE
+═══════════════════════════════════════════════════════ */
+.table-wrap{border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:10px 0}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+thead th{background:#f1f5f9;padding:9px 14px;text-align:left;
+  font-weight:700;color:var(--muted);text-transform:uppercase;
+  font-size:.72rem;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+tbody td{padding:8px 14px;border-bottom:1px solid #f8faff;font-family:monospace}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#f8faff}
+.vocab-badge{display:inline-flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,var(--blue),var(--teal));
+  color:#fff;border-radius:999px;padding:8px 22px;
+  font-weight:700;font-size:.92rem;margin:12px 0}
+.vocab-tradeoff{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.tradeoff-box{border:1px solid var(--border);border-radius:9px;padding:13px 15px}
+.tradeoff-box h4{font-size:.8rem;font-weight:700;margin-bottom:6px}
+.tradeoff-box p{font-size:.8rem;color:var(--muted);line-height:1.5}
+.arrow-up::before{content:"▲ "}
+.arrow-down::before{content:"▼ "}
+@media(max-width:500px){.vocab-tradeoff{grid-template-columns:1fr}}
+
+/* ═══════════════════════════════════════════════════════
+   UNK SECTION
+═══════════════════════════════════════════════════════ */
+.toggle-pill{display:flex;background:#f1f5f9;border-radius:8px;
+  padding:3px;width:fit-content;margin:12px 0;gap:3px}
+.tpill{padding:6px 16px;border:none;border-radius:6px;
+  font-size:.83rem;font-weight:600;cursor:pointer;
+  background:none;color:var(--muted);transition:all .2s}
+.tpill.active{background:#fff;color:var(--blue);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.unk-demo{padding:14px 16px;background:#fefce8;border:1px solid #fde68a;
+  border-radius:9px;font-family:monospace;font-size:.88rem;line-height:2}
+.unk-tag{display:inline-block;background:#fef2f2;border:1.5px solid #fca5a5;
+  border-radius:6px;padding:1px 9px;color:#dc2626;font-weight:700}
+.sub-tag{display:inline-block;background:#f0fdf4;border:1.5px solid #86efac;
+  border-radius:6px;padding:1px 9px;color:#16a34a;font-weight:700}
+.unk-compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.unk-panel{border:1px solid var(--border);border-radius:9px;padding:14px}
+.unk-panel h4{font-size:.82rem;font-weight:700;margin-bottom:10px;color:var(--muted)}
+@media(max-width:500px){.unk-compare{grid-template-columns:1fr}}
+
+/* ═══════════════════════════════════════════════════════
+   EMBEDDINGS HEATMAP
+═══════════════════════════════════════════════════════ */
+.embed-wrap{overflow-x:auto}
+.embed-table{display:table;min-width:max-content;margin:8px 0}
+.embed-row{display:flex;align-items:center;gap:10px;margin:4px 0}
+.etok{font-family:monospace;font-size:.82rem;font-weight:700;
+  min-width:100px;text-align:right;padding-right:8px;flex-shrink:0}
+.ecells{display:flex;gap:2px}
+.ecell{width:34px;height:28px;border-radius:4px;display:flex;
+  align-items:center;justify-content:center;font-size:.58rem;
+  font-weight:700;position:relative;cursor:default}
+.ecell:hover .ecell-tip{display:block}
+.ecell-tip{display:none;position:absolute;top:-26px;left:50%;
+  transform:translateX(-50%);background:#0d1b2a;color:#fff;
+  padding:2px 7px;border-radius:4px;font-size:.65rem;white-space:nowrap;z-index:10}
+.dim-labels{display:flex;gap:2px;margin-left:110px;margin-bottom:2px}
+.dim-lbl{width:34px;text-align:center;font-size:.62rem;color:var(--muted)}
+.embed-note{font-size:.78rem;color:var(--muted);margin-top:10px;
+  padding:9px 13px;background:#f8faff;border-radius:7px;border:1px solid var(--border)}
+
+/* ═══════════════════════════════════════════════════════
+   SIMILARITY SECTION
+═══════════════════════════════════════════════════════ */
+.sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:580px){.sim-grid{grid-template-columns:1fr}}
+.sim-card{border:1px solid var(--border);border-radius:10px;padding:16px}
+.sim-card h3{font-size:.88rem;font-weight:700;margin-bottom:14px}
+.sim-pair-row{display:flex;align-items:center;gap:8px;margin:7px 0}
+.sim-words{display:flex;align-items:center;gap:5px;min-width:130px}
+.sword{font-family:monospace;font-weight:700;font-size:.82rem;
+  background:#f1f5f9;padding:2px 9px;border-radius:5px}
+.svsep{font-size:.7rem;color:var(--muted)}
+.sim-bar-track{flex:1;background:#f1f5f9;border-radius:999px;height:8px;overflow:hidden}
+.sim-bar-fill{height:100%;border-radius:999px;transition:width .7s ease}
+.sim-pct{font-size:.78rem;font-weight:700;min-width:36px;text-align:right}
+.sim-note{font-size:.75rem;color:var(--muted);margin-top:10px;
+  padding:7px 10px;border-radius:6px;background:#f8faff}
+
+/* ═══════════════════════════════════════════════════════
+   3D SCATTER
+═══════════════════════════════════════════════════════ */
+.canvas-outer{position:relative;border:1px solid var(--border);
+  border-radius:12px;overflow:hidden;background:#fff;
+  cursor:grab;user-select:none;touch-action:none}
+.canvas-outer:active{cursor:grabbing}
+#scatter3d{display:block;width:100%;height:420px}
+.tip3d{position:absolute;background:rgba(13,27,42,.88);color:#fff;
+  padding:5px 11px;border-radius:7px;font-size:.78rem;
+  pointer-events:none;display:none;white-space:nowrap;z-index:10}
+.scatter-legend{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:.82rem}
+.leg-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.scatter-hint{font-size:.78rem;color:var(--muted);margin-top:6px}
+.scatter-caption{font-size:.82rem;color:var(--muted);
+  margin-top:14px;padding:10px 13px;background:#f8faff;
+  border-radius:8px;border:1px solid var(--border)}
+
+/* ═══════════════════════════════════════════════════════
+   MISC UTILS
+═══════════════════════════════════════════════════════ */
+.lbl{font-size:.72rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.small{font-size:.8rem;color:var(--muted)}
+.chip-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip-legend-item{display:flex;align-items:center;gap:5px;font-size:.78rem}
+.cleg-swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.info-row{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0}
+.info-box{flex:1;min-width:140px;background:var(--stage-bg);
+  border:1px solid var(--border);border-radius:9px;padding:12px 14px}
+.ib-val{font-size:1.4rem;font-weight:800;color:var(--blue)}
+.ib-lbl{font-size:.72rem;color:var(--muted);margin-top:2px}
+/* subtle subword decoration */
+.sub-prefix{color:var(--blue)}
+.sub-suffix{color:var(--teal)}
+.tok-explain{font-size:.8rem;color:var(--muted);margin-top:8px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════════════════════════════════════ -->
+<header class="site-header">
+  <h1>🧠 LLM Text Processing Pipeline</h1>
+  <p>An interactive visual explainer — from raw text to 3D embeddings, one step at a time.</p>
+</header>
+
+<!-- ══════════ PROGRESS NAV ════════════════════════════════════ -->
+<nav class="prog-nav" id="progNav">
+  <div class="pstep"><a class="pbub active" href="#stage-1">1</a><span class="plabel">Input</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-2">2</a><span class="plabel">Tokenize</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-3">3</a><span class="plabel">Vocabulary</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-4">4</a><span class="plabel">Token IDs</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-5">5</a><span class="plabel">UNK</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-6">6</a><span class="plabel">Embeddings</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-7">7</a><span class="plabel">Meaning</span></div>
+  <div class="parr">›</div>
+  <div class="pstep"><a class="pbub" href="#stage-8">8</a><span class="plabel">3D Plot</span></div>
+</nav>
+
+<div class="pipeline">
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 1 — RAW TEXT INPUT
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-1">
+  <div class="stage-head">
+    <div class="snum">1</div>
+    <div>
+      <div class="stitle">Raw Text Input</div>
+      <div class="ssub">What you type — before any processing</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      The model starts with plain text. No structure, no numbers — just characters.
+      Type any sentence below and click <strong>Analyze</strong> to run it through the full pipeline.
+    </div>
+    <textarea id="inputText">Unhappiness is unbelievable</textarea>
+    <button class="analyze-btn" onclick="analyze()">⚡ Analyze Pipeline</button>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">feeds into</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 2 — TOKENIZATION
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-2">
+  <div class="stage-head">
+    <div class="snum">2</div>
+    <div>
+      <div class="stitle">Tokenization &amp; Subword Splitting</div>
+      <div class="ssub">Breaking text into the model's vocabulary units</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      Text is split into <strong>subword pieces</strong> (using an algorithm like BPE or WordPiece).
+      A word like <em>"unhappiness"</em> becomes <span class="sub-prefix"><strong>un</strong></span> + <strong>happi</strong> + <span class="sub-suffix"><strong>##ness</strong></span> — three known pieces.
+      This lets the model handle rare and new words <em>without</em> needing them in the dictionary.
+      Tokens starting with <strong>##</strong> are continuations (they attach to the previous piece).
+    </div>
+    <div class="lbl">Tokens</div>
+    <div class="chips-row" id="tokensDisplay">
+      <span class="small" style="color:var(--muted)">Click Analyze above to see tokens here.</span>
+    </div>
+    <div class="tok-explain" id="tokExplain"></div>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">assigns IDs from</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 3 — VOCABULARY
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-3">
+  <div class="stage-head">
+    <div class="snum">3</div>
+    <div>
+      <div class="stitle">Vocabulary &amp; Vocabulary Size</div>
+      <div class="ssub">The fixed dictionary all tokens come from</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      The model has a fixed <strong>vocabulary</strong> — every possible token and its integer ID.
+      GPT-style models typically use <strong>~50,000</strong> tokens.
+      Larger vocabularies mean shorter sequences but a bigger embedding table;
+      smaller vocabularies need longer sequences but less memory.
+    </div>
+    <div class="vocab-badge">📚 Vocabulary size: ~50,257 tokens</div>
+    <div class="vocab-tradeoff">
+      <div class="tradeoff-box">
+        <h4 style="color:var(--blue)">Larger Vocabulary</h4>
+        <p><span class="arrow-down" style="color:var(--teal)"></span>Shorter token sequences<br>
+        <span class="arrow-up" style="color:var(--red)"></span>Bigger embedding table<br>
+        <span class="arrow-up" style="color:var(--red)"></span>More memory needed</p>
+      </div>
+      <div class="tradeoff-box">
+        <h4 style="color:var(--teal)">Smaller Vocabulary</h4>
+        <p><span class="arrow-up" style="color:var(--red)"></span>Longer sequences<br>
+        <span class="arrow-down" style="color:var(--teal)"></span>Smaller embedding table<br>
+        <span class="arrow-up" style="color:var(--red)"></span>More subword splitting</p>
+      </div>
+    </div>
+    <div class="lbl" style="margin-top:16px">Sample vocabulary (your tokens highlighted)</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Token</th><th>Token ID</th><th>In your text?</th></tr></thead>
+        <tbody id="vocabTableBody">
+          <tr><td>[PAD]</td><td>0</td><td>—</td></tr>
+          <tr><td>[UNK]</td><td>1</td><td>—</td></tr>
+          <tr><td>[CLS]</td><td>2</td><td>—</td></tr>
+          <tr><td>[SEP]</td><td>3</td><td>—</td></tr>
+          <tr><td>the</td><td>1,996</td><td>—</td></tr>
+          <tr><td>is</td><td>2,003</td><td>—</td></tr>
+          <tr><td>un</td><td>4,895</td><td>—</td></tr>
+          <tr><td>##happi</td><td>7,046</td><td>—</td></tr>
+          <tr><td>##ness</td><td>3,802</td><td>—</td></tr>
+          <tr><td>##believ</td><td>9,765</td><td>—</td></tr>
+          <tr><td>##able</td><td>2,869</td><td>—</td></tr>
+          <tr><td style="color:var(--muted)">··· 50,246 more ···</td><td>···</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">maps to</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 4 — TOKEN IDs
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-4">
+  <div class="stage-head">
+    <div class="snum">4</div>
+    <div>
+      <div class="stitle">Token IDs</div>
+      <div class="ssub">Converting tokens into integers the model can process</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      Each token is replaced by its integer ID from the vocabulary.
+      Text is now a <strong>sequence of numbers</strong> — the first real input to the model.
+      Colors link each token to its ID.
+    </div>
+    <div class="lbl">Token → ID mapping</div>
+    <div class="id-row" id="idDisplay">
+      <span class="small">Click Analyze to see token IDs.</span>
+    </div>
+    <div class="lbl" style="margin-top:16px">Integer sequence fed into the model</div>
+    <div id="idSequence" style="font-family:monospace;font-size:.88rem;padding:11px 14px;
+      background:#f8faff;border:1px solid var(--border);border-radius:8px;color:var(--blue)">
+      …
+    </div>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">handles unknowns via</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 5 — UNK TOKEN
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-5">
+  <div class="stage-head">
+    <div class="snum">5</div>
+    <div>
+      <div class="stitle">The [UNK] Token</div>
+      <div class="ssub">What happens when a word isn't in the vocabulary?</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      With <strong>word-level</strong> tokenization, any word not in the dictionary becomes
+      <span class="unk-tag">[UNK]</span> — the model loses all information about it.
+      With <strong>subword</strong> tokenization, rare words are split into known pieces,
+      so the model keeps some understanding even for unseen words.
+    </div>
+    <div class="toggle-pill">
+      <button class="tpill active" id="btnWord" onclick="showUnk('word')">Word-level</button>
+      <button class="tpill" id="btnSub"  onclick="showUnk('sub')">Subword (BPE)</button>
+    </div>
+    <div class="unk-compare">
+      <div class="unk-panel" id="unkWordPanel">
+        <h4>⚠️ Word-level tokenizer</h4>
+        <div class="unk-demo" id="unkWordDemo">
+          "unbelievable" → <span class="unk-tag">[UNK]</span><br>
+          "happiness" → <span class="unk-tag">[UNK]</span><br>
+          "transforming" → <span class="unk-tag">[UNK]</span>
+        </div>
+        <div class="small" style="margin-top:8px">
+          All information about these words is lost. The model only sees [UNK].
+        </div>
+      </div>
+      <div class="unk-panel" id="unkSubPanel">
+        <h4>✅ Subword tokenizer (BPE)</h4>
+        <div class="unk-demo" id="unkSubDemo">
+          "unbelievable" →
+            <span class="sub-tag">un</span>
+            <span class="sub-tag">believ</span>
+            <span class="sub-tag">##able</span><br>
+          "happiness" →
+            <span class="sub-tag">happi</span>
+            <span class="sub-tag">##ness</span><br>
+          "transforming" →
+            <span class="sub-tag">transform</span>
+            <span class="sub-tag">##ing</span>
+        </div>
+        <div class="small" style="margin-top:8px">
+          All pieces are in the vocabulary. No information is lost.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">each ID looked up in</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 6 — EMBEDDINGS
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-6">
+  <div class="stage-head">
+    <div class="snum">6</div>
+    <div>
+      <div class="stitle">Embeddings (Vectors)</div>
+      <div class="ssub">Token IDs become dense numerical vectors</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      The model contains an <strong>embedding table</strong>: a giant matrix where each row is
+      a learned vector of floating-point numbers for one token.
+      Looking up a token ID retrieves its row — a vector of typically <strong>512 – 4096</strong>
+      numbers. Below, 8 dimensions are shown for illustration.
+      🔵 Blue cells = negative values, 🔴 Red cells = positive values.
+    </div>
+    <div class="embed-wrap">
+      <div class="dim-labels" id="dimLabels"></div>
+      <div id="embedDisplay">
+        <span class="small">Click Analyze to see embeddings.</span>
+      </div>
+    </div>
+    <div class="embed-note">
+      ℹ️ Real models use 512–4096 dimensions. The heatmap above shows <strong>8 dimensions</strong>
+      for readability. Hover over any cell to see its exact value.
+      These vectors are <em>learned during training</em> — not hand-crafted.
+    </div>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">reveals</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 7 — SPELLING vs MEANING
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-7">
+  <div class="stage-head">
+    <div class="snum">7</div>
+    <div>
+      <div class="stitle">Spelling-Based vs Meaning-Based Representation</div>
+      <div class="ssub">Why embeddings capture semantics, not just characters</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      Simple character matching thinks <em>"cat"</em> and <em>"cap"</em> are similar (they share <em>"ca"</em>)
+      and <em>"cat"</em> and <em>"kitten"</em> are different. Embeddings learned from billions of words
+      know the truth: <strong>cat ≈ kitten</strong> (both small felines) and <strong>cat ≠ cap</strong>
+      (completely different categories). Similarity here is <strong>cosine similarity</strong> (0% = opposite, 100% = identical).
+    </div>
+    <div class="sim-grid">
+      <div class="sim-card">
+        <h3>🔤 Spelling-Based Similarity <span style="font-weight:400;color:var(--muted)">(character overlap)</span></h3>
+        <div id="spellSims"></div>
+        <div class="sim-note">Based on longest-common-subsequence over characters. High = many shared letters.</div>
+      </div>
+      <div class="sim-card">
+        <h3>💡 Meaning-Based Similarity <span style="font-weight:400;color:var(--muted)">(embedding cosine)</span></h3>
+        <div id="meaningSims"></div>
+        <div class="sim-note">Based on where words cluster in embedding space. High = similar meaning.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="connector">↓<div class="conn-label">projected into 3D via PCA</div></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     STAGE 8 — 3D EMBEDDING PLOT
+══════════════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage-8">
+  <div class="stage-head">
+    <div class="snum">8</div>
+    <div>
+      <div class="stitle">3D Embedding Visualization</div>
+      <div class="ssub">Drag to rotate · scroll to zoom · hover for labels</div>
+    </div>
+  </div>
+  <div class="stage-body">
+    <div class="expl">
+      Embeddings live in hundreds of dimensions — impossible to visualize directly.
+      PCA compresses them to 3 dimensions while preserving as much structure as possible.
+      <strong>Nearby points = similar meaning.</strong> Notice how animals, vehicles, and fruits
+      each form tight clusters, far from one another.
+    </div>
+    <div class="canvas-outer" id="canvasOuter">
+      <canvas id="scatter3d"></canvas>
+      <div class="tip3d" id="tip3d"></div>
+    </div>
+    <div class="scatter-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#22c55e"></div> Animals (cat, dog, kitten)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#3b82f6"></div> Vehicles (car, bus, train)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#f97316"></div> Fruits (apple, banana, mango)</div>
+    </div>
+    <div class="scatter-hint">💡 <strong>Drag</strong> to rotate · <strong>Scroll</strong> to zoom · <strong>Hover</strong> over a point to see its label</div>
+    <div class="scatter-caption">
+      🔬 <strong>What you're seeing:</strong> High-dimensional word embeddings (typically 384–4096 dimensions)
+      projected into 3D using PCA. The axes have no direct meaning — only the <em>relative distances</em> between
+      points matter. Words used in similar contexts end up close together in this space.
+    </div>
+  </div>
+</section>
+
+</div><!-- /pipeline -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+/* ─── Colour palette for tokens ───────────────────────────────── */
+const PALETTE = [
+  '#1a73e8','#0d9488','#8b5cf6','#ea580c','#dc2626',
+  '#0891b2','#15803d','#9333ea','#c2410c','#0369a1',
+];
+let colorMap = {};   // token → color
+
+/* ─── Minimal vocabulary (token → ID) ─────────────────────────── */
+const VOCAB = {
+  '[PAD]':0,'[UNK]':1,'[CLS]':2,'[SEP]':3,'[MASK]':4,
+  // common words
+  'a':1037,'an':2019,'the':1996,'is':2003,'are':2024,'was':2001,
+  'and':1998,'or':2030,'in':1999,'on':2006,'to':2000,'of':1997,
+  'that':2008,'it':2009,'not':2025,'with':2007,'this':2023,
+  'for':2005,'at':2012,'by':2011,'from':2013,'do':2079,
+  'he':2002,'she':2016,'we':2057,'they':2027,'you':2017,
+  'i':1045,'my':2026,'his':2010,'her':2014,'be':2022,
+  'has':2038,'had':2018,'will':2097,'can':2064,'may':2089,
+  'go':2175,'get':2131,'see':2156,'come':2272,'make':2191,
+  'love':2293,'know':2113,'want':2215,'feel':2229,'work':2147,
+  'time':2051,'way':2126,'day':2154,'cat':4937,'dog':3899,
+  'car':3482,'bus':4902,'good':2204,'bad':4997,'big':2502,
+  // subword prefixes
+  'un':4895,'re':2128,'pre':3653,'dis':4487,'mis':8087,
+  'over':2058,'under':2104,'sub':4942,'out':2041,'in':1999,
+  'im':3952,'ir':7231,'non':4612,'anti':8923,'semi':7634,
+  // common stems
+  'happi':7046,'sad':4537,'believ':9765,'think':2228,
+  'transform':7891,'chang':2347,'stand':3458,'run':2448,
+  'forgiv':9231,'possibl':8431,'imagin':7823,'creat':4521,
+  'expect':5234,'notic':7234,'provid':5876,'includ':5231,
+  // suffixes (## prefix = continuation token)
+  '##ness':3802,'##ing':2075,'##tion':2869,'##able':3085,
+  '##ible':6321,'##ly':2135,'##ed':2098,'##er':2099,
+  '##est':3382,'##ful':7342,'##less':4895,'##ment':2251,
+  '##al':2389,'##ive':3765,'##ous':4234,'##ary':7812,
+  '##ance':6543,'##ence':5876,'##s':2015,'##en':2531,
+  '##e':2063,'##ise':7654,'##ize':6789,'##ion':5723,
+};
+
+function getTokenId(tok) {
+  if (tok in VOCAB) return VOCAB[tok];
+  let h = 0;
+  for (const c of tok) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
+  return 5000 + (Math.abs(h) % 44999);
+}
+
+/* ─── Subword tokenizer ────────────────────────────────────────── */
+const PREFIXES_LIST = [
+  'under','trans','super','inter','extra','semi','anti',
+  'sub','pre','dis','mis','out','non','over','re','un','in','im','ir',
+];
+const SUFFIXES_LIST = [
+  'ation','ible','able','ness','ment','ance','ence','tion','sion',
+  'ary','ery','ory','ful','less','ous','ive','ist','ism',
+  'ing','ion','al','ise','ize','ly','ed','er','en','es','e',
+];
+
+function tokenizeWord(word) {
+  word = word.toLowerCase().replace(/[^a-z]/g,'');
+  if (!word) return [];
+  if (word in VOCAB && !['in','re','out','sub','non','anti','semi'].includes(word))
+    return [word];
+
+  let prefix = null, stem = word;
+  for (const p of PREFIXES_LIST) {
+    if (word.startsWith(p) && word.length > p.length + 2) {
+      prefix = p; stem = word.slice(p.length); break;
+    }
+  }
+  let suffix = null, root = stem;
+  for (const s of SUFFIXES_LIST) {
+    if (stem.endsWith(s) && stem.length > s.length + 1) {
+      suffix = s; root = stem.slice(0, -s.length); break;
+    }
+  }
+  const result = [];
+  if (prefix) result.push(prefix);
+  if (root)   result.push(root);
+  if (suffix) result.push('##' + suffix);
+  return result.length > 0 ? result : [word];
+}
+
+function tokenize(text) {
+  return text.toLowerCase()
+    .replace(/[^a-z\s]/g,' ')
+    .trim().split(/\s+/)
+    .filter(w => w.length > 0)
+    .flatMap(w => tokenizeWord(w));
+}
+
+/* ─── Hash-based deterministic embedding (8 dims) ─────────────── */
+function getEmbedding(token, dims = 8) {
+  const vals = [];
+  let h = 0;
+  for (const c of token) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
+  for (let d = 0; d < dims; d++) {
+    h = (Math.imul(h, 2654435769) ^ d) | 0;
+    vals.push(parseFloat(((h & 0xffff) / 0x7fff - 1).toFixed(3)));
+  }
+  return vals;
+}
+
+/* ─── Colour helpers ───────────────────────────────────────────── */
+function assignColors(tokens) {
+  colorMap = {};
+  let idx = 0;
+  tokens.forEach(t => {
+    if (!(t in colorMap)) colorMap[t] = PALETTE[idx++ % PALETTE.length];
+  });
+}
+
+function valToRgb(v) {
+  // v ∈ [-1,1] → blue…white…red
+  v = Math.max(-1, Math.min(1, v));
+  if (v >= 0) {
+    const c = Math.round(255 * (1 - v));
+    return `rgb(255,${c},${c})`;
+  } else {
+    const c = Math.round(255 * (1 + v));
+    return `rgb(${c},${c},255)`;
+  }
+}
+function textOnBg(v) { return Math.abs(v) > 0.55 ? '#fff' : '#374151'; }
+
+/* ─── ANALYZE ──────────────────────────────────────────────────── */
+function analyze() {
+  const raw = document.getElementById('inputText').value.trim();
+  if (!raw) return;
+
+  const tokens = tokenize(raw);
+  if (!tokens.length) return;
+
+  assignColors(tokens);
+
+  renderTokens(tokens, raw);
+  renderVocabTable(tokens);
+  renderTokenIDs(tokens);
+  renderEmbeddings(tokens);
+  updateProgNav(tokens);
+}
+
+/* ─── Stage 2: Tokens ──────────────────────────────────────────── */
+function renderTokens(tokens, raw) {
+  const wrap = document.getElementById('tokensDisplay');
+  wrap.innerHTML = tokens.map(t => {
+    const col = colorMap[t];
+    const isPrefix = !t.startsWith('##') && PREFIXES_LIST.includes(t);
+    const isSuffix = t.startsWith('##');
+    let border = '';
+    if (isPrefix) border = `border:2px dashed ${col};`;
+    if (isSuffix) border = `border:2px dotted ${col};`;
+    return `<div class="chip">
+      <span class="chip-top" style="background:${col};${border}">${t}</span>
+    </div>`;
+  }).join('');
+
+  const words = raw.toLowerCase().replace(/[^a-z\s]/g,' ').trim().split(/\s+/).filter(Boolean);
+  const expl = document.getElementById('tokExplain');
+  expl.innerHTML = `<strong>Input words:</strong> ${words.length} → 
+    <strong>Subword tokens:</strong> ${tokens.length}
+    ${tokens.length > words.length ? ` (+${tokens.length - words.length} from splitting)` : ''}.
+    Tokens with <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px">##</code>
+    are <em>continuation pieces</em> — they attach to the token before them.`;
+}
+
+/* ─── Stage 3: Vocab table ─────────────────────────────────────── */
+function renderVocabTable(tokens) {
+  const tokenSet = new Set(tokens);
+  const body = document.getElementById('vocabTableBody');
+  const special = [
+    ['[PAD]',0],['[UNK]',1],['[CLS]',2],['[SEP]',3],
+    ['the',1996],['is',2003],
+  ];
+  const inText = tokens.map(t => [t, getTokenId(t)]);
+  const all = [...special, ...inText.filter(([t]) => !special.find(s=>s[0]===t))];
+  // dedupe
+  const seen = new Set();
+  const rows = all.filter(([t]) => { if (seen.has(t)) return false; seen.add(t); return true; });
+
+  body.innerHTML = rows.map(([tok, id]) => {
+    const hit = tokenSet.has(tok);
+    const col  = colorMap[tok] || '';
+    return `<tr style="${hit?'background:#f0f7ff;font-weight:700':''}">
+      <td>${hit ? `<span style="color:${col}">${tok}</span>` : tok}</td>
+      <td>${id.toLocaleString()}</td>
+      <td style="text-align:center">${hit ? '✅' : '—'}</td>
+    </tr>`;
+  }).join('')
+  + `<tr><td style="color:var(--muted)">··· 50,000+ more ···</td><td>···</td><td></td></tr>`;
+}
+
+/* ─── Stage 4: Token IDs ───────────────────────────────────────── */
+function renderTokenIDs(tokens) {
+  const idWrap = document.getElementById('idDisplay');
+  const ids = tokens.map(t => getTokenId(t));
+
+  idWrap.innerHTML = tokens.map((t, i) => {
+    const col = colorMap[t];
+    return `<div class="id-unit">
+      <span class="id-tok" style="background:${col}">${t}</span>
+      <span class="id-arrow">↓</span>
+      <span class="id-num" style="color:${col};border-color:${col}">${ids[i].toLocaleString()}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('idSequence').textContent = '[' + ids.join(', ') + ']';
+}
+
+/* ─── Stage 6: Embeddings heatmap ─────────────────────────────── */
+function renderEmbeddings(tokens) {
+  const DIMS = 8;
+  // dim labels
+  const dlWrap = document.getElementById('dimLabels');
+  dlWrap.innerHTML = Array.from({length:DIMS}, (_,i) =>
+    `<div class="dim-lbl">d${i}</div>`).join('');
+
+  const wrap = document.getElementById('embedDisplay');
+  // unique tokens only
+  const unique = [...new Set(tokens)];
+
+  wrap.innerHTML = unique.map(tok => {
+    const vec = getEmbedding(tok, DIMS);
+    const col = colorMap[tok];
+    const cells = vec.map((v,d) => {
+      const bg = valToRgb(v);
+      const fg = textOnBg(v);
+      return `<div class="ecell" style="background:${bg};color:${fg}">
+        <span class="ecell-tip">${v > 0 ? '+' : ''}${v}</span>
+        ${v.toFixed(2)}
+      </div>`;
+    }).join('');
+    return `<div class="embed-row">
+      <div class="etok" style="color:${col}">${tok}</div>
+      <div class="ecells">${cells}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Progress nav update ──────────────────────────────────────── */
+function updateProgNav(tokens) {
+  document.querySelectorAll('.pbub').forEach((el,i) => {
+    el.classList.toggle('active', i === 0);
+  });
+}
+
+/* ─── Stage 5: UNK toggle ──────────────────────────────────────── */
+function showUnk(mode) {
+  document.getElementById('btnWord').classList.toggle('active', mode==='word');
+  document.getElementById('btnSub').classList.toggle('active',  mode==='sub');
+  document.getElementById('unkWordPanel').style.opacity = mode==='word' ? '1' : '.45';
+  document.getElementById('unkSubPanel').style.opacity  = mode==='sub'  ? '1' : '.45';
+}
+
+/* ─── Stage 7: Similarity bars ─────────────────────────────────── */
+const PAIRS = [
+  {a:'cat',  b:'kitten', spell:17, meaning:92},
+  {a:'cat',  b:'cap',    spell:67, meaning: 8},
+  {a:'king', b:'queen',  spell:20, meaning:85},
+  {a:'run',  b:'ran',    spell:67, meaning:88},
+];
+
+function lcs(a,b) {
+  const m=a.length, n=b.length;
+  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]+1:Math.max(dp[i-1][j],dp[i][j-1]);
+  return dp[m][n];
+}
+
+function simBar(pct, color) {
+  return `<div class="sim-bar-track">
+    <div class="sim-bar-fill" style="width:${pct}%;background:${color}"></div>
+  </div>`;
+}
+
+function renderSimilarities() {
+  const spellDiv   = document.getElementById('spellSims');
+  const meaningDiv = document.getElementById('meaningSims');
+
+  const computedPairs = PAIRS.map(p => ({
+    ...p,
+    spell: Math.round(lcs(p.a,p.b) / Math.max(p.a.length,p.b.length) * 100),
+  }));
+
+  spellDiv.innerHTML = computedPairs.map(p => `
+    <div class="sim-pair-row">
+      <div class="sim-words">
+        <span class="sword">${p.a}</span>
+        <span class="svsep">vs</span>
+        <span class="sword">${p.b}</span>
+      </div>
+      ${simBar(p.spell,'#64748b')}
+      <div class="sim-pct" style="color:#64748b">${p.spell}%</div>
+    </div>`).join('');
+
+  meaningDiv.innerHTML = computedPairs.map(p => {
+    const color = p.meaning > 60 ? '#16a34a' : '#dc2626';
+    return `<div class="sim-pair-row">
+      <div class="sim-words">
+        <span class="sword">${p.a}</span>
+        <span class="svsep">vs</span>
+        <span class="sword">${p.b}</span>
+      </div>
+      ${simBar(p.meaning, color)}
+      <div class="sim-pct" style="color:${color}">${p.meaning}%</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   STAGE 8 — 3D Scatter Plot
+─────────────────────────────────────────────────────────────────── */
+const PTS_3D = [
+  // Animals
+  {label:'cat',    x: 1.40, y: 0.50, z: 0.10, group:'Animals',  color:'#22c55e'},
+  {label:'dog',    x: 1.60, y: 0.30, z:-0.10, group:'Animals',  color:'#22c55e'},
+  {label:'kitten', x: 1.50, y: 0.70, z: 0.20, group:'Animals',  color:'#22c55e'},
+  // Vehicles
+  {label:'car',    x:-1.50, y: 0.10, z: 0.00, group:'Vehicles', color:'#3b82f6'},
+  {label:'bus',    x:-1.70, y:-0.20, z: 0.10, group:'Vehicles', color:'#3b82f6'},
+  {label:'train',  x:-1.40, y: 0.30, z:-0.20, group:'Vehicles', color:'#3b82f6'},
+  // Fruits
+  {label:'apple',  x: 0.00, y:-1.50, z: 0.50, group:'Fruits',   color:'#f97316'},
+  {label:'banana', x: 0.20, y:-1.70, z: 0.30, group:'Fruits',   color:'#f97316'},
+  {label:'mango',  x:-0.10, y:-1.40, z: 0.60, group:'Fruits',   color:'#f97316'},
+];
+
+class Scatter3D {
+  constructor(canvas, tooltip) {
+    this.cv  = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.tip = tooltip;
+    this.ax  = 0.35;    // X-axis rotation
+    this.ay  = 0.60;    // Y-axis rotation
+    this.scale = 95;
+    this.zoom  = 1;
+    this.drag  = false;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.hov   = null;
+    this.pts2d = [];    // cached projected points
+    this.W = 0; this.H = 0;
+    this.dpr = window.devicePixelRatio || 1;
+
+    this._bind();
+    this._resize();
+    this._render();
+  }
+
+  _resize() {
+    const wrap = this.cv.parentElement;
+    const W = wrap.clientWidth || 600;
+    const H = parseInt(getComputedStyle(this.cv).height) || 420;
+    this.W = W; this.H = H;
+    this.cv.width  = W * this.dpr;
+    this.cv.height = H * this.dpr;
+    this.cv.style.width  = W + 'px';
+    this.cv.style.height = H + 'px';
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  _project(x, y, z) {
+    // Rotate Y
+    const cy = Math.cos(this.ay), sy = Math.sin(this.ay);
+    const x1 =  x*cy + z*sy;
+    const z1 = -x*sy + z*cy;
+    // Rotate X
+    const cx = Math.cos(this.ax), sx = Math.sin(this.ax);
+    const y2 =  y*cx - z1*sx;
+    const z2 =  y*sx + z1*cx;
+    // Perspective
+    const fov = 4;
+    const pz  = z2 + fov;
+    const f   = this.scale * this.zoom * fov / Math.max(pz, 0.1);
+    return {
+      sx: this.W/2 + x1*f,
+      sy: this.H/2 - y2*f,
+      sz: z2,
+      f:  f/this.scale,
+    };
+  }
+
+  _render() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    // Grid hints
+    this._drawGrid(ctx);
+
+    // Project & sort back→front
+    const projected = PTS_3D.map(p => ({...p, proj:this._project(p.x, p.y, p.z)}))
+      .sort((a,b) => a.proj.sz - b.proj.sz);
+    this.pts2d = projected;
+
+    for (const p of projected) {
+      const {sx, sy, f} = p.proj;
+      const r = Math.max(6, 11 * f * 1.4);
+      const isHov = p === this.hov;
+
+      // Glow on hover
+      if (isHov) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r+5, 0, Math.PI*2);
+        ctx.fillStyle = p.color + '33';
+        ctx.fill();
+      }
+
+      // Drop shadow
+      ctx.beginPath();
+      ctx.arc(sx+2, sy+2, r, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(0,0,0,0.10)';
+      ctx.fill();
+
+      // Point
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI*2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+      ctx.strokeStyle = isHov ? '#fff' : 'rgba(255,255,255,0.7)';
+      ctx.lineWidth   = isHov ? 2.5 : 1.5;
+      ctx.stroke();
+
+      // Label
+      const fs = Math.max(10, 11.5 * f * 1.3);
+      ctx.font      = `${isHov?700:600} ${fs}px system-ui,sans-serif`;
+      ctx.fillStyle = isHov ? p.color : '#1e293b';
+      ctx.textAlign = 'left';
+      ctx.shadowColor   = 'rgba(255,255,255,0.9)';
+      ctx.shadowBlur    = 3;
+      ctx.fillText(p.label, sx + r + 4, sy + fs*0.36);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  _drawGrid(ctx) {
+    // Soft axes from origin
+    const o = this._project(0,0,0);
+    [[2,0,0,'#ef4444'],[0,2,0,'#22c55e'],[0,0,2,'#3b82f6']].forEach(([x,y,z,c]) => {
+      const e = this._project(x,y,z);
+      ctx.beginPath();
+      ctx.moveTo(o.sx,o.sy); ctx.lineTo(e.sx,e.sy);
+      ctx.strokeStyle = c; ctx.lineWidth=1; ctx.globalAlpha=.18; ctx.stroke();
+      ctx.globalAlpha=1;
+    });
+    // Cluster halos
+    const clusters = [
+      {pts:[PTS_3D[0],PTS_3D[1],PTS_3D[2]], color:'#22c55e'},
+      {pts:[PTS_3D[3],PTS_3D[4],PTS_3D[5]], color:'#3b82f6'},
+      {pts:[PTS_3D[6],PTS_3D[7],PTS_3D[8]], color:'#f97316'},
+    ];
+    clusters.forEach(({pts,color}) => {
+      const pps = pts.map(p => this._project(p.x,p.y,p.z));
+      const cx  = pps.reduce((s,p)=>s+p.sx,0)/pps.length;
+      const cy  = pps.reduce((s,p)=>s+p.sy,0)/pps.length;
+      const maxR= Math.max(...pps.map(p=>Math.hypot(p.sx-cx,p.sy-cy))) + 18;
+      ctx.beginPath();
+      ctx.arc(cx,cy,maxR,0,Math.PI*2);
+      ctx.strokeStyle = color; ctx.lineWidth=1.2; ctx.globalAlpha=.18; ctx.stroke();
+      ctx.globalAlpha=1;
+    });
+  }
+
+  _bind() {
+    const cv = this.cv;
+
+    // Mouse drag
+    cv.addEventListener('mousedown', e => {
+      this.drag=true; this.lastX=e.clientX; this.lastY=e.clientY;
+    });
+    window.addEventListener('mouseup', () => { this.drag=false; });
+    cv.addEventListener('mousemove', e => {
+      const rect = cv.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      if (this.drag) {
+        this.ay += (e.clientX - this.lastX) * 0.012;
+        this.ax += (e.clientY - this.lastY) * 0.012;
+        this.lastX=e.clientX; this.lastY=e.clientY;
+        this._render(); return;
+      }
+      // Hover detection
+      let found = null;
+      for (const p of this.pts2d) {
+        const {sx,sy,f}=p.proj, r=Math.max(6,11*f*1.4)+6;
+        if (Math.hypot(mx-sx,my-sy) < r) { found=p; break; }
+      }
+      if (found!==this.hov) {
+        this.hov=found; this._render();
+        if (found) {
+          this.tip.style.display='block';
+          this.tip.style.left = (found.proj.sx + 14)+'px';
+          this.tip.style.top  = (found.proj.sy - 12)+'px';
+          this.tip.textContent= `${found.label}  ·  ${found.group}`;
+        } else {
+          this.tip.style.display='none';
+        }
+      }
+    });
+    cv.addEventListener('mouseleave', () => {
+      this.hov=null; this.tip.style.display='none'; this._render();
+    });
+
+    // Scroll to zoom
+    cv.addEventListener('wheel', e => {
+      e.preventDefault();
+      this.zoom = Math.max(0.4, Math.min(3, this.zoom * (e.deltaY > 0 ? 0.92 : 1.09)));
+      this._render();
+    }, {passive:false});
+
+    // Touch drag
+    let lTX=0, lTY=0;
+    cv.addEventListener('touchstart', e => {
+      e.preventDefault(); lTX=e.touches[0].clientX; lTY=e.touches[0].clientY;
+    },{passive:false});
+    cv.addEventListener('touchmove', e => {
+      e.preventDefault();
+      this.ay += (e.touches[0].clientX - lTX)*0.014;
+      this.ax += (e.touches[0].clientY - lTY)*0.014;
+      lTX=e.touches[0].clientX; lTY=e.touches[0].clientY;
+      this._render();
+    },{passive:false});
+
+    // Resize
+    window.addEventListener('resize', () => { this._resize(); this._render(); });
+  }
+}
+
+/* ─── IntersectionObserver for progress nav ────────────────────── */
+function initProgressObserver() {
+  const bubbles = document.querySelectorAll('.pbub');
+  const sections = document.querySelectorAll('.stage');
+
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.intersectionRatio > 0.3) {
+        const id = e.target.id; // e.g. "stage-3"
+        const n  = parseInt(id.replace('stage-',''));
+        bubbles.forEach((b,i) => b.classList.toggle('active', i===n-1));
+      }
+    });
+  },{threshold:0.3});
+
+  sections.forEach(s => obs.observe(s));
+}
+
+/* ─── Init ─────────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  renderSimilarities();
+  initProgressObserver();
+
+  // Init 3D scatter
+  const cv  = document.getElementById('scatter3d');
+  const tip = document.getElementById('tip3d');
+  window._scatter = new Scatter3D(cv, tip);
+
+  // Auto-analyze the default text
+  analyze();
+});
+</script>
+</body>
+</html>
